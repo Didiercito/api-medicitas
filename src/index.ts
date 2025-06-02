@@ -1,13 +1,13 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors'; 
-import { testConnection } from './src/config/db';
-import routerAuth from './src/routes/AuthRoutes';
-import routerUser from './src/routes/UserRoutes';
-import routerDoctor from './src/routes/DoctorRoutes';
-import routerSpecialty from './src/routes/SpecialtyRoutes';
-import routerAppointment from './src/routes/AppointmentRoutes';
-import routerSchedule from './src/routes/ScheduleRoutes';
+import { testConnection } from './config/db';
+import routerAuth from './routes/AuthRoutes';
+import routerUser from './routes/UserRoutes';
+import routerDoctor from './routes/DoctorRoutes';
+import routerSpecialty from './routes/SpecialtyRoutes';
+import routerAppointment from './routes/AppointmentRoutes';
+import routerSchedule from './routes/ScheduleRoutes';
 
 dotenv.config();
 

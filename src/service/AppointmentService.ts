@@ -244,25 +244,25 @@ export class AppointmentService {
     }
 
     async confirm(id: number, pacienteId: number): Promise<any> {
-    const existing = await executeQuery(
-        'SELECT * FROM citas WHERE id = ? AND paciente_id = ?',
-        [id, pacienteId]
-    );
+        const existing = await executeQuery(
+            'SELECT * FROM citas WHERE id = ? AND paciente_id = ?',
+            [id, pacienteId]
+        );
 
-    if (existing.length === 0) {
-        throw new Error('Cita no encontrada');
-    }
+        if (existing.length === 0) {
+            throw new Error('Cita no encontrada');
+        }
 
-    if (existing[0].estado !== 'programada') {
-        throw new Error('Solo se pueden confirmar citas programadas');
-    }
+        if (existing[0].estado !== 'programada') {
+            throw new Error('Solo se pueden confirmar citas programadas');
+        }
 
-    await executeQuery(
-        'UPDATE citas SET estado = "confirmada", update_at = NOW() WHERE id = ?',
-        [id]
-    );
+        await executeQuery(
+            'UPDATE citas SET estado = "confirmada", update_at = NOW() WHERE id = ?',
+            [id]
+        );
 
-    return await this.getAppointmentWithDetails(id);
+        return await this.getAppointmentWithDetails(id);
     }
 
     async getAvailableSlots(doctorId: number, fecha: string): Promise<any> {
@@ -402,12 +402,20 @@ export class AppointmentService {
     async getById(id: number, pacienteId: number): Promise<any> {
         const result = await executeQuery(
             `SELECT c.*, 
-                d.nombres as doctor_nombre, d.apellidos as doctor_apellido,
-                e.nombre as especialidad_nombre
-         FROM citas c
-         JOIN doctores d ON c.doctor_id = d.id
-         JOIN especialidades e ON d.especialidad_id = e.id
-         WHERE c.id = ? AND c.paciente_id = ?`,
+            -- Información del doctor
+            d.nombres as doctor_nombre, 
+            d.apellidos as doctor_apellido,
+            d.correo as doctor_correo,
+            d.telefono as doctor_telefono,
+            d.duracion_consulta as doctor_duracion_consulta,
+            -- Información de la especialidad
+            e.nombre as especialidad_nombre,
+            e.descripcion as especialidad_descripcion,
+            e.precio_base as especialidad_precio_base
+     FROM citas c
+     JOIN doctores d ON c.doctor_id = d.id
+     JOIN especialidades e ON d.especialidad_id = e.id
+     WHERE c.id = ? AND c.paciente_id = ?`,
             [id, pacienteId]
         );
 
@@ -433,5 +441,55 @@ export class AppointmentService {
 
         const appointment = AppointmentHelper.createFromDB(result[0]);
         return AppointmentHelper.formatAppointment(appointment);
+    }
+
+    async getByIdWithDoctorInfo(id: number, pacienteId: number): Promise<any> {
+        const result = await executeQuery(
+            `SELECT c.*, 
+            d.nombres as doctor_nombre, 
+            d.apellidos as doctor_apellido,
+            d.correo as doctor_correo,
+            d.telefono as doctor_telefono,
+            d.duracion_consulta as doctor_duracion_consulta,
+            e.nombre as especialidad_nombre,
+            e.descripcion as especialidad_descripcion,
+            e.precio_base as especialidad_precio_base
+     FROM citas c
+     JOIN doctores d ON c.doctor_id = d.id
+     JOIN especialidades e ON d.especialidad_id = e.id
+     WHERE c.id = ? AND c.paciente_id = ?`,
+            [id, pacienteId]
+        );
+
+        if (result.length === 0) {
+            throw new Error('Cita no encontrada');
+        }
+
+        const row = result[0];
+
+        return {
+            id: row.id,
+            fecha_cita: row.fecha_cita,
+            hora_cita: row.hora_cita,
+            estado: row.estado,
+            motivo: row.motivo,
+            notas: row.notas,
+            precio: row.precio,
+            create_at: row.create_at,
+            update_at: row.update_at,
+            doctor: {
+                id: row.doctor_id,
+                nombres: row.doctor_nombre,
+                apellidos: row.doctor_apellido,
+                correo: row.doctor_correo,
+                telefono: row.doctor_telefono,
+                duracion_consulta: row.doctor_duracion_consulta,
+                especialidad: {
+                    nombre: row.especialidad_nombre,
+                    descripcion: row.especialidad_descripcion,
+                    precio_base: row.especialidad_precio_base
+                }
+            }
+        };
     }
 }

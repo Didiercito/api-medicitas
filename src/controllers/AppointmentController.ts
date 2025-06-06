@@ -241,38 +241,4 @@ export class AppointmentController {
             });
         }
     }
-
-    async getAppointmentWithDoctorInfo(req: Request, res: Response): Promise<void> {
-    try {
-        const userId = (req as any).user.userId;
-        const appointmentId = parseInt(req.params.id);
-
-        if (isNaN(appointmentId)) {
-            res.status(400).json({
-                success: false,
-                message: 'ID de cita inválido'
-            });
-            return;
-        }
-
-        const appointment = await this.appointmentService.getByIdWithDoctorInfo(
-            appointmentId, 
-            userId
-        );
-
-        res.status(200).json({
-            success: true,
-            data: appointment
-        });
-
-    } catch (error: any) {
-        console.error('Error obteniendo cita con información del doctor:', error);
-
-        const statusCode = error.message.includes('no encontrada') ? 404 : 500;
-        res.status(statusCode).json({
-            success: false,
-            message: error.message || 'Error interno del servidor'
-        });
-    }
-}
 }

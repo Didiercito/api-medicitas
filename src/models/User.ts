@@ -9,6 +9,7 @@ export class User {
     public genero: string;
     public alergias?: string;
     public tipo_sangre?: string;
+    public imagen_usuario?: string | null;
     public create_at: Date;
     public update_at: Date;
 
@@ -24,7 +25,8 @@ export class User {
         create_at: Date,
         update_at: Date,
         alergias?: string,
-        tipo_sangre?: string
+        tipo_sangre?: string,
+        imagen_usuario?: string | null
     ) {
         this.id = id;
         this.nombres = nombres;
@@ -36,6 +38,7 @@ export class User {
         this.telefono = telefono;
         this.alergias = alergias;
         this.tipo_sangre = tipo_sangre;
+        this.imagen_usuario = imagen_usuario;
         this.create_at = create_at;
         this.update_at = update_at;
     }

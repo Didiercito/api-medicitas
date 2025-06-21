@@ -18,7 +18,6 @@ export class ScheduleHelper {
 
     static formatTime(timeString: string): string {
         try {
-            // Si ya es un string de tiempo válido (HH:mm), devolverlo tal como está
             if (typeof timeString === 'string' && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeString)) {
                 return timeString;
             }
@@ -46,7 +45,6 @@ export class ScheduleHelper {
             
         } catch (error) {
             console.error('Error formateando tiempo:', error, 'Valor:', timeString);
-            // Devolver el valor original si no se puede formatear
             return timeString;
         }
     }
@@ -74,11 +72,9 @@ export class ScheduleHelper {
         const slots: string[] = [];
         
         try {
-            // Parsear hora de inicio
             const [startHour, startMinute] = horaInicio.split(':').map(Number);
             const [endHour, endMinute] = horaFin.split(':').map(Number);
             
-            // Crear objetos Date para facilitar los cálculos
             const startDate = new Date();
             startDate.setHours(startHour, startMinute, 0, 0);
             
@@ -87,7 +83,6 @@ export class ScheduleHelper {
             
             const current = new Date(startDate);
             
-            // Generar slots cada intervalMinutos
             while (current < endDate) {
                 const timeStr = `${current.getHours().toString().padStart(2, '0')}:${current.getMinutes().toString().padStart(2, '0')}`;
                 slots.push(timeStr);

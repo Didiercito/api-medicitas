@@ -83,6 +83,7 @@ export class AppointmentService {
         SELECT c.id, c.fecha_cita, c.hora_cita, c.estado, c.motivo, c.notas,
                c.create_at, c.update_at,
                d.nombres as doctor_nombre, d.apellidos as doctor_apellido,
+               d.imagen_doctor,
                e.nombre as especialidad_nombre
         FROM citas c
         JOIN doctores d ON c.doctor_id = d.id
@@ -108,7 +109,13 @@ export class AppointmentService {
             const appointments = await executeQuery(query, params);
             return appointments.map((row: any) => {
                 const appointment = AppointmentHelper.createFromDB(row);
-                return AppointmentHelper.formatAppointment(appointment);
+                const formatted = AppointmentHelper.formatAppointment(appointment);
+
+                if (row.imagen_doctor) {
+                    formatted.doctor_imagen_url = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${row.imagen_doctor}`;
+                }
+
+                return formatted;
             });
         } catch (error) {
             console.error('❌ Error en getPatientAppointments:', error);
@@ -131,14 +138,11 @@ export class AppointmentService {
         }
 
         if (data.fecha_cita || data.hora_cita) {
-            // ✅ Corregir el manejo de fechas
             let fechaString: string;
 
             if (data.fecha_cita) {
-                // Si viene nueva fecha, usarla directamente
                 fechaString = data.fecha_cita;
             } else {
-                // Si no hay nueva fecha, convertir la existente a string
                 const existingDate = existing[0].fecha_cita;
                 if (existingDate instanceof Date) {
                     fechaString = existingDate.toISOString().split('T')[0];
@@ -177,7 +181,7 @@ export class AppointmentService {
 
             const hasConflict = await this.checkTimeConflict(
                 existing[0].doctor_id,
-                fechaString, // Usar string para la consulta SQL
+                fechaString,
                 horaCita,
                 id
             );
@@ -187,7 +191,6 @@ export class AppointmentService {
             }
         }
 
-        // ✅ Manejar la fecha para el UPDATE también
         let fechaParaUpdate: string;
 
         if (data.fecha_cita) {
@@ -291,16 +294,14 @@ export class AppointmentService {
             };
         }
 
-        // Generar todos los slots posibles
         const allSlots = ScheduleHelper.generateTimeSlots(
             horarioDelDia.hora_inicio,
             horarioDelDia.hora_fin,
-            40 // duración en minutos
+            40 
         );
 
         console.log('🔍 Slots generados:', allSlots);
 
-        // Obtener citas existentes para esta fecha y doctor
         const citasExistentes = await executeQuery(
             `SELECT hora_cita, motivo, id 
          FROM citas 
@@ -311,7 +312,6 @@ export class AppointmentService {
 
         console.log('🔍 Citas existentes:', citasExistentes);
 
-        // Crear mapa de horas ocupadas con información adicional
         const horasOcupadas = new Map();
         citasExistentes.forEach((cita: any) => {
             horasOcupadas.set(cita.hora_cita, {
@@ -320,7 +320,6 @@ export class AppointmentService {
             });
         });
 
-        // Mapear todos los slots con su estado
         const slotsConEstado = allSlots.map((slot: string) => {
             const isOcupado = horasOcupadas.has(slot);
             const citaInfo = horasOcupadas.get(slot);
@@ -336,7 +335,6 @@ export class AppointmentService {
             };
         });
 
-        // Calcular resumen
         const disponibles = slotsConEstado.filter(slot => slot.disponible).length;
         const ocupados = slotsConEstado.filter(slot => !slot.disponible).length;
 
@@ -402,21 +400,22 @@ export class AppointmentService {
     async getById(id: number, pacienteId: number): Promise<any> {
         const result = await executeQuery(
             `SELECT c.*, 
-            -- Información del doctor
-            d.id as doctor_id,
-            d.nombres as doctor_nombre, 
-            d.apellidos as doctor_apellido,
-            d.correo as doctor_correo,
-            d.telefono as doctor_telefono,
-            d.duracion_consulta as doctor_duracion_consulta,
-            -- Información de la especialidad
-            e.nombre as especialidad_nombre,
-            e.descripcion as especialidad_descripcion,
-            e.precio_base as especialidad_precio_base
-     FROM citas c
-     JOIN doctores d ON c.doctor_id = d.id
-     JOIN especialidades e ON d.especialidad_id = e.id
-     WHERE c.id = ? AND c.paciente_id = ?`,
+        -- Información del doctor
+        d.id as doctor_id,
+        d.nombres as doctor_nombre, 
+        d.apellidos as doctor_apellido,
+        d.correo as doctor_correo,
+        d.telefono as doctor_telefono,
+        d.duracion_consulta as doctor_duracion_consulta,
+        d.imagen_doctor,
+        -- Información de la especialidad
+        e.nombre as especialidad_nombre,
+        e.descripcion as especialidad_descripcion,
+        e.precio_base as especialidad_precio_base
+ FROM citas c
+ JOIN doctores d ON c.doctor_id = d.id
+ JOIN especialidades e ON d.especialidad_id = e.id
+ WHERE c.id = ? AND c.paciente_id = ?`,
             [id, pacienteId]
         );
 
@@ -443,6 +442,9 @@ export class AppointmentService {
                 correo: row.doctor_correo,
                 telefono: row.doctor_telefono,
                 duracion_consulta: row.doctor_duracion_consulta,
+                imagen_url: row.imagen_doctor ?
+                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${row.imagen_doctor}` :
+                    null,
                 especialidad: {
                     nombre: row.especialidad_nombre,
                     descripcion: row.especialidad_descripcion,
@@ -455,21 +457,22 @@ export class AppointmentService {
     private async getAppointmentWithDetails(appointmentId: number): Promise<any> {
         const result = await executeQuery(
             `SELECT c.*, 
-            -- Información del doctor
-            d.id as doctor_id,
-            d.nombres as doctor_nombre, 
-            d.apellidos as doctor_apellido,
-            d.correo as doctor_correo,
-            d.telefono as doctor_telefono,
-            d.duracion_consulta as doctor_duracion_consulta,
-            -- Información de la especialidad
-            e.nombre as especialidad_nombre,
-            e.descripcion as especialidad_descripcion,
-            e.precio_base as especialidad_precio_base
-     FROM citas c
-     JOIN doctores d ON c.doctor_id = d.id
-     JOIN especialidades e ON d.especialidad_id = e.id
-     WHERE c.id = ?`,
+        -- Información del doctor
+        d.id as doctor_id,
+        d.nombres as doctor_nombre, 
+        d.apellidos as doctor_apellido,
+        d.correo as doctor_correo,
+        d.telefono as doctor_telefono,
+        d.duracion_consulta as doctor_duracion_consulta,
+        d.imagen_doctor,
+        -- Información de la especialidad
+        e.nombre as especialidad_nombre,
+        e.descripcion as especialidad_descripcion,
+        e.precio_base as especialidad_precio_base
+ FROM citas c
+ JOIN doctores d ON c.doctor_id = d.id
+ JOIN especialidades e ON d.especialidad_id = e.id
+ WHERE c.id = ?`,
             [appointmentId]
         );
 
@@ -492,6 +495,9 @@ export class AppointmentService {
                 correo: row.doctor_correo,
                 telefono: row.doctor_telefono,
                 duracion_consulta: row.doctor_duracion_consulta,
+                imagen_url: row.imagen_doctor ?
+                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${row.imagen_doctor}` :
+                    null,
                 especialidad: {
                     nombre: row.especialidad_nombre,
                     descripcion: row.especialidad_descripcion,

@@ -32,9 +32,9 @@ export class AuthController {
             const now = new Date();
             await executeQuery(
                 `INSERT INTO usuarios 
-                (nombres, apellidos, correo, contrasena, telefono, edad, genero, alergias, tipo_sangre, create_at, update_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [nombres, apellidos, correo, hashedPassword, telefono, edad, genero, alergias || null, tipo_sangre || null, now, now]
+                (nombres, apellidos, correo, contrasena, telefono, edad, genero, alergias, tipo_sangre, imagen_usuario, create_at, update_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [nombres, apellidos, correo, hashedPassword, telefono, edad, genero, alergias || null, tipo_sangre || null, null, now, now]
             );
 
             res.status(201).json({ message: "Usuario registrado exitosamente" });

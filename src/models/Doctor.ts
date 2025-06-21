@@ -7,6 +7,7 @@ export class Doctor {
     public especialidad_id: number;
     public duracion_consulta: number; 
     public activo: boolean;
+    public imagen_doctor?: string | null;
     public create_at: Date;
     public update_at: Date;
 
@@ -20,7 +21,8 @@ export class Doctor {
         duracion_consulta: number,
         activo: boolean,
         create_at: Date,
-        update_at: Date
+        update_at: Date,
+        imagen_doctor?: string | null
     ) {
         this.id = id;
         this.nombres = nombres;
@@ -30,6 +32,7 @@ export class Doctor {
         this.especialidad_id = especialidad_id;
         this.duracion_consulta = duracion_consulta;
         this.activo = activo;
+        this.imagen_doctor = imagen_doctor;
         this.create_at = create_at;
         this.update_at = update_at;
     }

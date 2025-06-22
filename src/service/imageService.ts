@@ -60,47 +60,48 @@ export class ImageService {
     return `${IMAGES_FOLDER}${uniqueName}`;
   }
 
-  static async uploadImage(file: Express.Multer.File): Promise<UploadImageResult> {
-    try {
-      const validation = this.validateImage(file);
-      if (!validation.valid) {
-        return {
-          success: false,
-          error: validation.error
-        };
-      }
-
-      const imageKey = this.generateImageKey(file.originalname);
-
-      const uploadCommand = new PutObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: imageKey,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-        Metadata: {
-          originalName: file.originalname,
-          uploadedAt: new Date().toISOString()
-        }
-      });
-
-      await s3Client.send(uploadCommand);
-
-      const imageUrl = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${imageKey}`;
-
-      return {
-        success: true,
-        imageUrl,
-        imageKey
-      };
-
-    } catch (error) {
-      console.error('Error uploading image:', error);
+static async uploadImage(file: Express.Multer.File): Promise<UploadImageResult> {
+  try {
+    const validation = this.validateImage(file);
+    if (!validation.valid) {
       return {
         success: false,
-        error: 'Error interno del servidor al subir la imagen'
+        error: validation.error
       };
     }
+
+    const imageKey = this.generateImageKey(file.originalname);
+
+    const uploadCommand = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: imageKey,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+      ACL: 'public-read',
+      Metadata: {
+        originalName: file.originalname,
+        uploadedAt: new Date().toISOString()
+      }
+    });
+
+    await s3Client.send(uploadCommand);
+
+    const imageUrl = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${imageKey}`;
+
+    return {
+      success: true,
+      imageUrl,
+      imageKey
+    };
+
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    return {
+      success: false,
+      error: 'Error interno del servidor al subir la imagen'
+    };
   }
+}
 
 
   static async uploadMultipleImages(files: Express.Multer.File[]): Promise<UploadImageResult[]> {

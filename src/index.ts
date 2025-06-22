@@ -17,7 +17,6 @@ const app = express();
 app.use(express.json());
 app.use(cors({origin: '*'}));
 
-
 app.use('/api/v1/user', routerUser);
 app.use('/api/v1/auth', routerAuth);
 app.use('/api/v1/doctor', routerDoctor);

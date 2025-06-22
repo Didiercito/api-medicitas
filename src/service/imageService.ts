@@ -54,55 +54,59 @@ export class ImageService {
 
     return { valid: true };
   }
+  
   static generateImageKey(originalName: string): string {
     const extension = path.extname(originalName);
     const uniqueName = `${uuidv4()}${extension}`;
     return `${IMAGES_FOLDER}${uniqueName}`;
   }
 
-static async uploadImage(file: Express.Multer.File): Promise<UploadImageResult> {
-  try {
-    const validation = this.validateImage(file);
-    if (!validation.valid) {
+  static async uploadImage(file: Express.Multer.File): Promise<UploadImageResult> {
+    try {
+      const validation = this.validateImage(file);
+      if (!validation.valid) {
+        return {
+          success: false,
+          error: validation.error
+        };
+      }
+
+      const imageKey = this.generateImageKey(file.originalname);
+
+      // Eliminado el parámetro ACL: 'public-read'
+      const uploadCommand = new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: imageKey,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+        Metadata: {
+          originalName: file.originalname,
+          uploadedAt: new Date().toISOString()
+        }
+      });
+
+      await s3Client.send(uploadCommand);
+
+      // URL simplificada sin región
+      const imageUrl = `https://${BUCKET_NAME}.s3.amazonaws.com/${imageKey}`;
+      
+      // Log para debugging
+      console.log(`✅ Imagen subida exitosamente: ${imageUrl}`);
+
+      return {
+        success: true,
+        imageUrl,
+        imageKey
+      };
+
+    } catch (error) {
+      console.error('Error detallado al subir imagen:', error);
       return {
         success: false,
-        error: validation.error
+        error: `Error interno del servidor al subir la imagen: ${error instanceof Error ? error.message : 'Error desconocido'}`
       };
     }
-
-    const imageKey = this.generateImageKey(file.originalname);
-
-    const uploadCommand = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: imageKey,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-      ACL: 'public-read',
-      Metadata: {
-        originalName: file.originalname,
-        uploadedAt: new Date().toISOString()
-      }
-    });
-
-    await s3Client.send(uploadCommand);
-
-    const imageUrl = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${imageKey}`;
-
-    return {
-      success: true,
-      imageUrl,
-      imageKey
-    };
-
-  } catch (error) {
-    console.error('Error uploading image:', error);
-    return {
-      success: false,
-      error: 'Error interno del servidor al subir la imagen'
-    };
   }
-}
-
 
   static async uploadMultipleImages(files: Express.Multer.File[]): Promise<UploadImageResult[]> {
     const uploadPromises = files.map(file => this.uploadImage(file));

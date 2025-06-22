@@ -4,23 +4,36 @@ import { Doctor } from '../models/Doctor';
 import { ImageService } from '../service/imageService';
 
 export class DoctorController {
+    private generateImageUrl(imageKey?: string | null): string | null {
+        if (!imageKey) return null;
+        const bucketName = process.env.S3_BUCKET_NAME || 'app-medicitas';
+        return `https://${bucketName}.s3.amazonaws.com/${imageKey}`;
+    }
 
     async getAllDoctors(req: Request, res: Response): Promise<void> {
         try {
             const rows = await executeQuery('SELECT * FROM doctores');
-            const doctors = rows.map((row: any) => new Doctor(
-                row.id,
-                row.nombres,
-                row.apellidos,
-                row.correo,
-                row.telefono,
-                row.especialidad_id,
-                row.duracion_consulta,
-                row.activo,
-                new Date(row.create_at),
-                new Date(row.update_at),
-                row.imagen_doctor
-            ));
+            const doctors = rows.map((row: any) => {
+                const doctor = new Doctor(
+                    row.id,
+                    row.nombres,
+                    row.apellidos,
+                    row.correo,
+                    row.telefono,
+                    row.especialidad_id,
+                    row.duracion_consulta,
+                    row.activo,
+                    new Date(row.create_at),
+                    new Date(row.update_at),
+                    row.imagen_doctor 
+                );
+                
+                return {
+                    ...doctor,
+                    imageUrl: this.generateImageUrl(doctor.imagen_doctor)
+                };
+            });
+            
             res.status(200).json(doctors);
         } catch (error) {
             console.error("Error al obtener doctores:", error);
@@ -59,9 +72,7 @@ export class DoctorController {
 
             const doctorWithImage = {
                 ...doctor,
-                imageUrl: doctor.imagen_doctor ?
-                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${doctor.imagen_doctor}` :
-                    null
+                imageUrl: this.generateImageUrl(doctor.imagen_doctor)
             };
 
             res.status(200).json(doctorWithImage);
@@ -109,7 +120,7 @@ export class DoctorController {
         const now = new Date();
 
         try {
-            let imageKey = null;
+            let imageKey: string | null = null; // Inicializar como null
 
             if (req.file) {
                 console.log('📷 Archivo recibido:', req.file.originalname, req.file.size, 'bytes');
@@ -125,7 +136,8 @@ export class DoctorController {
                     return;
                 }
 
-                imageKey = uploadResult.imageKey;
+                // uploadResult.imageKey podría ser string o undefined, así que lo convertimos a string o null
+                imageKey = uploadResult.imageKey || null;
                 console.log('✅ Imagen subida exitosamente con key:', imageKey);
             } else {
                 console.log('ℹ️ No se envió imagen, creando doctor sin imagen');
@@ -149,15 +161,15 @@ export class DoctorController {
                 esActivo,
                 now,
                 now,
-                imageKey
+                imageKey // imageKey es string | null, coincide con el parámetro opcional del constructor
             );
 
             const responseDoctor = {
                 ...doctor,
-                imageUrl: imageKey ?
-                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${imageKey}` :
-                    null
+                imageUrl: this.generateImageUrl(imageKey)
             };
+
+            console.log('URL de imagen generada:', responseDoctor.imageUrl);
 
             res.status(201).json({
                 success: true,
@@ -210,7 +222,7 @@ export class DoctorController {
             }
 
             const existingDoctor = existingDoctorResult[0];
-            let imageKey = existingDoctor.imagen_doctor;
+            let imageKey: string | null = existingDoctor.imagen_doctor || null;
 
             if (req.file) {
                 const uploadResult = await ImageService.uploadImage(req.file);
@@ -228,7 +240,7 @@ export class DoctorController {
                     await ImageService.deleteImage(existingDoctor.imagen_doctor);
                 }
 
-                imageKey = uploadResult.imageKey;
+                imageKey = uploadResult.imageKey || null;
             }
 
             const updatedData = {
@@ -268,9 +280,7 @@ export class DoctorController {
 
             const responseDoctor = {
                 ...updatedDoctor,
-                imageUrl: updatedDoctor.imagen_doctor ?
-                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${updatedDoctor.imagen_doctor}` :
-                    null
+                imageUrl: this.generateImageUrl(updatedDoctor.imagen_doctor)
             };
 
             res.status(200).json({

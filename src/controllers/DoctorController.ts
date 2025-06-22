@@ -41,7 +41,7 @@ export class DoctorController {
                 res.status(404).json({ message: "Doctor no encontrado" });
                 return;
             }
-            
+
             const row = result[0];
             const doctor = new Doctor(
                 row.id,
@@ -59,8 +59,8 @@ export class DoctorController {
 
             const doctorWithImage = {
                 ...doctor,
-                imageUrl: doctor.imagen_doctor ? 
-                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${doctor.imagen_doctor}` : 
+                imageUrl: doctor.imagen_doctor ?
+                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${doctor.imagen_doctor}` :
                     null
             };
 
@@ -72,6 +72,17 @@ export class DoctorController {
     }
 
     async createDoctor(req: Request, res: Response): Promise<void> {
+        console.log('=== DEBUG CREATEDOCTOR ===');
+        console.log('req.body:', req.body);
+        console.log('req.file:', req.file);
+        console.log('Content-Type:', req.headers['content-type']);
+        console.log('========================');
+
+        if (!req.body || Object.keys(req.body).length === 0) {
+            res.status(400).json({ message: "Faltan datos en el body de la petición" });
+            return;
+        }
+
         const {
             nombres,
             apellidos,
@@ -82,19 +93,49 @@ export class DoctorController {
             activo
         } = req.body;
 
-        if (!nombres || !apellidos || !correo || !telefono || !especialidad_id || !duracion_consulta || activo === undefined) {
-            res.status(400).json({ message: "Faltan campos obligatorios" });
+        const especialidadId = typeof especialidad_id === 'string' ? parseInt(especialidad_id) : especialidad_id;
+        const duracionConsulta = typeof duracion_consulta === 'string' ? parseInt(duracion_consulta) : duracion_consulta;
+        const esActivo = typeof activo === 'string' ? activo === 'true' : activo;
+
+        if (!nombres || !apellidos || !correo || !telefono || !especialidadId || !duracionConsulta || esActivo === undefined) {
+            res.status(400).json({
+                message: "Faltan campos obligatorios",
+                received: req.body,
+                required: ['nombres', 'apellidos', 'correo', 'telefono', 'especialidad_id', 'duracion_consulta', 'activo']
+            });
             return;
         }
 
         const now = new Date();
 
         try {
+            let imageKey = null;
+
+            if (req.file) {
+                console.log('📷 Archivo recibido:', req.file.originalname, req.file.size, 'bytes');
+
+                const uploadResult = await ImageService.uploadImage(req.file);
+
+                if (!uploadResult.success) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Error al subir la imagen",
+                        error: uploadResult.error
+                    });
+                    return;
+                }
+
+                imageKey = uploadResult.imageKey;
+                console.log('✅ Imagen subida exitosamente con key:', imageKey);
+            } else {
+                console.log('ℹ️ No se envió imagen, creando doctor sin imagen');
+            }
+
             const result = await executeQuery(
                 `INSERT INTO doctores 
-                (nombres, apellidos, correo, telefono, especialidad_id, duracion_consulta, activo, imagen_doctor, create_at, update_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [nombres, apellidos, correo, telefono, especialidad_id, duracion_consulta, activo, null, now, now]
+            (nombres, apellidos, correo, telefono, especialidad_id, duracion_consulta, activo, imagen_doctor, create_at, update_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [nombres, apellidos, correo, telefono, especialidadId, duracionConsulta, esActivo, imageKey, now, now]
             );
 
             const doctor = new Doctor(
@@ -103,18 +144,33 @@ export class DoctorController {
                 apellidos,
                 correo,
                 telefono,
-                especialidad_id,
-                duracion_consulta,
-                activo,
+                especialidadId,
+                duracionConsulta,
+                esActivo,
                 now,
                 now,
-                null
+                imageKey
             );
 
-            res.status(201).json({ message: "Doctor creado exitosamente", doctor });
+            const responseDoctor = {
+                ...doctor,
+                imageUrl: imageKey ?
+                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${imageKey}` :
+                    null
+            };
+
+            res.status(201).json({
+                success: true,
+                message: "Doctor creado exitosamente",
+                doctor: responseDoctor
+            });
+
         } catch (error) {
-            console.error("Error al crear doctor:", error);
-            res.status(500).json({ message: "Error del servidor" });
+            console.error("❌ Error al crear doctor:", error);
+            res.status(500).json({
+                success: false,
+                message: "Error del servidor"
+            });
         }
     }
 
@@ -136,9 +192,9 @@ export class DoctorController {
         } = req.body;
 
         if ((!req.body || Object.keys(req.body).length === 0) && !req.file) {
-            res.status(400).json({ 
+            res.status(400).json({
                 success: false,
-                message: "No se enviaron datos para actualizar." 
+                message: "No se enviaron datos para actualizar."
             });
             return;
         }
@@ -146,9 +202,9 @@ export class DoctorController {
         try {
             const existingDoctorResult = await executeQuery('SELECT * FROM doctores WHERE id = ?', [id]);
             if (existingDoctorResult.length === 0) {
-                res.status(404).json({ 
+                res.status(404).json({
                     success: false,
-                    message: "Doctor no encontrado" 
+                    message: "Doctor no encontrado"
                 });
                 return;
             }
@@ -158,7 +214,7 @@ export class DoctorController {
 
             if (req.file) {
                 const uploadResult = await ImageService.uploadImage(req.file);
-                
+
                 if (!uploadResult.success) {
                     res.status(400).json({
                         success: false,
@@ -212,8 +268,8 @@ export class DoctorController {
 
             const responseDoctor = {
                 ...updatedDoctor,
-                imageUrl: updatedDoctor.imagen_doctor ? 
-                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${updatedDoctor.imagen_doctor}` : 
+                imageUrl: updatedDoctor.imagen_doctor ?
+                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${updatedDoctor.imagen_doctor}` :
                     null
             };
 
@@ -225,9 +281,9 @@ export class DoctorController {
 
         } catch (error) {
             console.error("Error al actualizar doctor:", error);
-            res.status(500).json({ 
+            res.status(500).json({
                 success: false,
-                message: "Error del servidor" 
+                message: "Error del servidor"
             });
         }
     }

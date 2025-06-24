@@ -24,8 +24,8 @@ const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '5242880');
 
 export interface UploadImageResult {
   success: boolean;
-  imageUrl?: string;
-  imageKey?: string;
+  imageUrl?: string | null;
+  imageKey?: string | null;
   error?: string;
 }
 
@@ -61,6 +61,36 @@ export class ImageService {
     return `${IMAGES_FOLDER}${uniqueName}`;
   }
 
+  // Método para obtener la URL que AWS genera automáticamente
+  static async getImageUrl(imageKey?: string | null): Promise<string | null> {
+    if (!imageKey) return null;
+    
+    try {
+      const command = new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: imageKey
+      });
+
+      // AWS generará automáticamente la URL
+      const response = await s3Client.send(command);
+      
+      // Construir la URL usando el formato estándar de AWS con región
+      const region = process.env.AWS_REGION || 'us-east-1';
+      return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${imageKey}`;
+      
+    } catch (error) {
+      console.error('Error al verificar imagen:', error);
+      return null;
+    }
+  }
+
+  // Método síncrono para generar URL sin verificar existencia (más rápido)
+  static generateImageUrl(imageKey?: string | null): string | null {
+    if (!imageKey) return null;
+    const region = process.env.AWS_REGION || 'us-east-1';
+    return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${imageKey}`;
+  }
+
   static async uploadImage(file: Express.Multer.File): Promise<UploadImageResult> {
     try {
       const validation = this.validateImage(file);
@@ -73,7 +103,6 @@ export class ImageService {
 
       const imageKey = this.generateImageKey(file.originalname);
 
-      // Eliminado el parámetro ACL: 'public-read'
       const uploadCommand = new PutObjectCommand({
         Bucket: BUCKET_NAME,
         Key: imageKey,
@@ -87,10 +116,8 @@ export class ImageService {
 
       await s3Client.send(uploadCommand);
 
-      // URL simplificada sin región
-      const imageUrl = `https://${BUCKET_NAME}.s3.amazonaws.com/${imageKey}`;
+      const imageUrl = this.generateImageUrl(imageKey);
       
-      // Log para debugging
       console.log(`✅ Imagen subida exitosamente: ${imageUrl}`);
 
       return {

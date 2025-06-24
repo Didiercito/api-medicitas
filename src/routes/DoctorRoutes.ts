@@ -1,4 +1,3 @@
-// routes/DoctorRoutes.ts
 import express from 'express';
 import { DoctorController } from '../controllers/DoctorController';
 import { uploadDoctorImage, handleUploadError } from '../middleware/middlewareImgt';

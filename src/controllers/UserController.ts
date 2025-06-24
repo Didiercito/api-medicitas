@@ -7,7 +7,11 @@ export class UserController {
     async getAllUsers(req: Request, res: Response): Promise<void> {
         try {
             const users = await executeQuery('SELECT * FROM usuarios');
-            res.status(200).json(users as User[]);
+            const usersWithImages = (users as User[]).map(user => ({
+                ...user,
+                imageUrl: ImageService.generateImageUrl(user.imagen_usuario)
+            }));
+            res.status(200).json(usersWithImages);
         } catch (error) {
             console.error('Error al obtener usuarios:', error);
             res.status(500).json({ message: 'Error del servidor' });
@@ -27,9 +31,7 @@ export class UserController {
             const user = result[0] as User;
             const userWithImage = {
                 ...user,
-                imageUrl: user.imagen_usuario ? 
-                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${user.imagen_usuario}` : 
-                    null
+                imageUrl: ImageService.generateImageUrl(user.imagen_usuario)
             };
             res.status(200).json(userWithImage);
         } catch (error) {
@@ -79,8 +81,9 @@ export class UserController {
                     await ImageService.deleteImage(existingUser.imagen_usuario);
                 }
 
-                imageKey = uploadResult.imageKey;
+                imageKey = uploadResult.imageKey || null;
             }
+
             const updatedData = {
                 nombres: nombres || existingUser.nombres,
                 apellidos: apellidos || existingUser.apellidos,
@@ -120,9 +123,7 @@ export class UserController {
 
             const responseUser = {
                 ...updatedUser,
-                imageUrl: updatedUser.imagen_usuario ? 
-                    `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${updatedUser.imagen_usuario}` : 
-                    null
+                imageUrl: ImageService.generateImageUrl(updatedUser.imagen_usuario)
             };
 
             res.status(200).json({

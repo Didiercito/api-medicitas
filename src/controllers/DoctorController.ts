@@ -4,12 +4,6 @@ import { Doctor } from '../models/Doctor';
 import { ImageService } from '../service/imageService';
 
 export class DoctorController {
-    private generateImageUrl(imageKey?: string | null): string | null {
-        if (!imageKey) return null;
-        const bucketName = process.env.S3_BUCKET_NAME || 'app-medicitas';
-        return `https://${bucketName}.s3.amazonaws.com/${imageKey}`;
-    }
-
     async getAllDoctors(req: Request, res: Response): Promise<void> {
         try {
             const rows = await executeQuery('SELECT * FROM doctores');
@@ -30,7 +24,7 @@ export class DoctorController {
                 
                 return {
                     ...doctor,
-                    imageUrl: this.generateImageUrl(doctor.imagen_doctor)
+                    imagen_doctor: ImageService.generateImageUrl(doctor.imagen_doctor)
                 };
             });
             
@@ -72,7 +66,7 @@ export class DoctorController {
 
             const doctorWithImage = {
                 ...doctor,
-                imageUrl: this.generateImageUrl(doctor.imagen_doctor)
+                imagen_doctor: ImageService.generateImageUrl(doctor.imagen_doctor)
             };
 
             res.status(200).json(doctorWithImage);
@@ -120,7 +114,7 @@ export class DoctorController {
         const now = new Date();
 
         try {
-            let imageKey: string | null = null; // Inicializar como null
+            let imageKey: string | null = null;
 
             if (req.file) {
                 console.log('📷 Archivo recibido:', req.file.originalname, req.file.size, 'bytes');
@@ -136,7 +130,6 @@ export class DoctorController {
                     return;
                 }
 
-                // uploadResult.imageKey podría ser string o undefined, así que lo convertimos a string o null
                 imageKey = uploadResult.imageKey || null;
                 console.log('✅ Imagen subida exitosamente con key:', imageKey);
             } else {
@@ -161,15 +154,15 @@ export class DoctorController {
                 esActivo,
                 now,
                 now,
-                imageKey // imageKey es string | null, coincide con el parámetro opcional del constructor
+                imageKey
             );
 
             const responseDoctor = {
                 ...doctor,
-                imageUrl: this.generateImageUrl(imageKey)
+                imagen_doctor: ImageService.generateImageUrl(imageKey)
             };
 
-            console.log('URL de imagen generada:', responseDoctor.imageUrl);
+            console.log('URL de imagen generada:', responseDoctor.imagen_doctor);
 
             res.status(201).json({
                 success: true,
@@ -280,7 +273,7 @@ export class DoctorController {
 
             const responseDoctor = {
                 ...updatedDoctor,
-                imageUrl: this.generateImageUrl(updatedDoctor.imagen_doctor)
+                imagen_doctor: ImageService.generateImageUrl(updatedDoctor.imagen_doctor)
             };
 
             res.status(200).json({
@@ -300,6 +293,8 @@ export class DoctorController {
 
     async deleteDoctor(req: Request, res: Response): Promise<void> {
         const id = Number(req.params.id);
+        const force = req.query.force === 'true';
+
         if (isNaN(id)) {
             res.status(400).json({ message: "ID inválido" });
             return;
@@ -314,13 +309,33 @@ export class DoctorController {
 
             const doctor = existing[0];
 
+            const citasResult = await executeQuery('SELECT COUNT(*) as count FROM citas WHERE doctor_id = ?', [id]);
+            const citasCount = citasResult[0].count;
+
+            if (citasCount > 0 && !force) {
+                res.status(409).json({ 
+                    message: "El doctor tiene citas asociadas",
+                    citasAsociadas: citasCount,
+                    confirmacion: "Para eliminar el doctor y sus citas, envía la petición con ?force=true"
+                });
+                return;
+            }
+
+            if (citasCount > 0) {
+                console.log(`🗑️ Eliminando ${citasCount} citas asociadas al doctor ID: ${id}`);
+                await executeQuery('DELETE FROM citas WHERE doctor_id = ?', [id]);
+            }
+
             if (doctor.imagen_doctor) {
                 await ImageService.deleteImage(doctor.imagen_doctor);
             }
 
             await executeQuery('DELETE FROM doctores WHERE id = ?', [id]);
 
-            res.status(200).json({ message: "Doctor eliminado correctamente" });
+            res.status(200).json({ 
+                message: "Doctor eliminado correctamente",
+                ...(citasCount > 0 && { citasEliminadas: citasCount })
+            });
         } catch (error) {
             console.error("Error al eliminar doctor:", error);
             res.status(500).json({ message: "Error del servidor" });

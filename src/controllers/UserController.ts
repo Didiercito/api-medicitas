@@ -11,10 +11,17 @@ export class UserController {
                 ...user,
                 imagen_usuario: ImageService.generateImageUrl(user.imagen_usuario)
             }));
-            res.status(200).json(usersWithImages);
+            res.status(200).json({
+                success: true,
+                message: "Usuarios obtenidos correctamente",
+                data: usersWithImages
+            });
         } catch (error) {
             console.error('Error al obtener usuarios:', error);
-            res.status(500).json({ message: 'Error del servidor' });
+            res.status(500).json({ 
+                success: false,
+                message: 'Error del servidor' 
+            });
         }
     }
 
@@ -24,7 +31,10 @@ export class UserController {
         try {
             const result = await executeQuery('SELECT * FROM usuarios WHERE id = ?', [id]);
             if (result.length === 0) {
-                res.status(404).json({ message: 'Usuario no encontrado' });
+                res.status(404).json({ 
+                    success: false,
+                    message: 'Usuario no encontrado' 
+                });
                 return;
             }
 
@@ -33,18 +43,31 @@ export class UserController {
                 ...user,
                 imagen_usuario: ImageService.generateImageUrl(user.imagen_usuario)
             };
-            res.status(200).json(userWithImage);
+            
+            res.status(200).json({
+                success: true,
+                message: "Usuario obtenido correctamente",
+                data: [userWithImage] 
+            });
         } catch (error) {
             console.error('Error al obtener usuario:', error);
-            res.status(500).json({ message: 'Error del servidor' });
+            res.status(500).json({ 
+                success: false,
+                message: 'Error del servidor' 
+            });
         }
     }
 
     async updateUser(req: Request, res: Response): Promise<void> {
         const { id } = req.params;
-        const { nombres, apellidos, correo, telefono, edad, genero, alergias, tipo_sangre } = req.body as Partial<User>;
+        
+        const { 
+            nombres, apellidos, correo, telefono, edad, genero, alergias, tipo_sangre,
+            imagen_base64  // ← NUEVO CAMPO PARA BASE64
+        } = req.body as Partial<User & { imagen_base64?: string }>;
 
-        if ((!req.body || Object.keys(req.body).length === 0) && !req.file) {
+        // ✅ ACTUALIZAR VALIDACIÓN PARA INCLUIR BASE64
+        if ((!req.body || Object.keys(req.body).length === 0) && !req.file && !imagen_base64) {
             res.status(400).json({ 
                 success: false,
                 message: "No se enviaron datos para actualizar." 
@@ -65,13 +88,31 @@ export class UserController {
             const existingUser = existingUserResult[0] as User;
             let imageKey = existingUser.imagen_usuario; 
 
-            if (req.file) {
+            if (imagen_base64) {
+                const uploadResult = await ImageService.uploadBase64Image(imagen_base64);
+                
+                if (!uploadResult.success) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Error al subir la imagen desde base64",
+                        error: uploadResult.error
+                    });
+                    return;
+                }
+
+                if (existingUser.imagen_usuario) {
+                    await ImageService.deleteImage(existingUser.imagen_usuario);
+                }
+
+                imageKey = uploadResult.imageKey;
+            }
+            else if (req.file) {
                 const uploadResult = await ImageService.uploadImage(req.file);
                 
                 if (!uploadResult.success) {
                     res.status(400).json({
                         success: false,
-                        message: "Error al subir la imagen",
+                        message: "Error al subir la imagen desde archivo",
                         error: uploadResult.error
                     });
                     return;
@@ -93,7 +134,7 @@ export class UserController {
                 genero: genero || existingUser.genero,
                 alergias: alergias !== undefined ? alergias : existingUser.alergias,
                 tipo_sangre: tipo_sangre !== undefined ? tipo_sangre : existingUser.tipo_sangre,
-                imagen_usuario: imageKey
+                imagen_usuario: imageKey  
             };
 
             const now = new Date();
@@ -147,7 +188,10 @@ export class UserController {
         try {
             const userExists = await executeQuery("SELECT * FROM usuarios WHERE id = ?", [id]);
             if (userExists.length === 0) {
-                res.status(404).json({ message: "Usuario no encontrado" });
+                res.status(404).json({ 
+                    success: false,
+                    message: "Usuario no encontrado" 
+                });
                 return;
             }
 
@@ -158,10 +202,16 @@ export class UserController {
             }
 
             await executeQuery("DELETE FROM usuarios WHERE id = ?", [id]);
-            res.status(200).json({ message: "Usuario eliminado correctamente" });
+            res.status(200).json({ 
+                success: true,
+                message: "Usuario eliminado correctamente" 
+            });
         } catch (error) {
             console.error("Error al eliminar usuario:", error);
-            res.status(500).json({ message: "Error del servidor" });
+            res.status(500).json({ 
+                success: false,
+                message: "Error del servidor" 
+            });
         }
     }
 }

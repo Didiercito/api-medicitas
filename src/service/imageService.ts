@@ -129,6 +129,75 @@ export class ImageService {
     }
   }
 
+  // ✅ NUEVA FUNCIÓN PARA MANEJAR BASE64
+  static async uploadBase64Image(base64String: string): Promise<UploadImageResult> {
+    try {
+      // Extraer tipo de archivo y datos
+      const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) {
+        return {
+          success: false,
+          error: "Formato de imagen base64 inválido"
+        };
+      }
+
+      const mimeType = matches[1];
+      const imageData = matches[2];
+      
+      // Validar tipo de archivo
+      if (!ALLOWED_TYPES.includes(mimeType)) {
+        return {
+          success: false,
+          error: `Tipo de archivo no permitido. Tipos válidos: ${ALLOWED_TYPES.join(', ')}`
+        };
+      }
+
+      // Convertir base64 a buffer
+      const imageBuffer = Buffer.from(imageData, 'base64');
+      
+      // Validar tamaño
+      if (imageBuffer.length > MAX_FILE_SIZE) {
+        return {
+          success: false,
+          error: `Archivo demasiado grande. Tamaño máximo: ${MAX_FILE_SIZE / 1024 / 1024}MB`
+        };
+      }
+
+      // Generar key única
+      const extension = mimeType.split('/')[1];
+      const imageKey = `${IMAGES_FOLDER}${uuidv4()}.${extension}`;
+
+      // Subir a S3
+      const uploadCommand = new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: imageKey,
+        Body: imageBuffer,
+        ContentType: mimeType,
+        Metadata: {
+          originalName: `profile_image.${extension}`,
+          uploadedAt: new Date().toISOString()
+        }
+      });
+
+      await s3Client.send(uploadCommand);
+
+      const imageUrl = this.generateImageUrl(imageKey);
+
+      return {
+        success: true,
+        imageUrl,
+        imageKey
+      };
+
+    } catch (error) {
+      console.error('Error subiendo imagen base64:', error);
+      return {
+        success: false,
+        error: `Error interno del servidor al subir la imagen: ${error instanceof Error ? error.message : 'Error desconocido'}`
+      };
+    }
+  }
+
   static async uploadMultipleImages(files: Express.Multer.File[]): Promise<UploadImageResult[]> {
     const uploadPromises = files.map(file => this.uploadImage(file));
     return Promise.all(uploadPromises);

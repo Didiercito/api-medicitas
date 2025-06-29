@@ -57,21 +57,17 @@ export class ScheduleService {
 
     async getByDoctor(doctorId: number): Promise<any[]> {
         try {
-            console.log('🔍 Obteniendo horarios para doctor_id:', doctorId);
             
             const rows: any = await executeQuery(
                 `SELECT * FROM horarios WHERE doctor_id = ? ORDER BY dia_semana, hora_inicio`, 
                 [doctorId]
             );
             
-            console.log('🔍 Horarios encontrados:', rows.length);
-            
             if (rows.length === 0) {
                 return [];
             }
             
             const schedules = rows.map((row: any) => {
-                console.log('🔍 Procesando fila:', row);
                 return ScheduleHelper.createFromDB(row);
             });
             

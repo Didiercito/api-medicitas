@@ -77,12 +77,6 @@ export class DoctorController {
     }
 
     async createDoctor(req: Request, res: Response): Promise<void> {
-        console.log('=== DEBUG CREATEDOCTOR ===');
-        console.log('req.body:', req.body);
-        console.log('req.file:', req.file);
-        console.log('Content-Type:', req.headers['content-type']);
-        console.log('========================');
-
         if (!req.body || Object.keys(req.body).length === 0) {
             res.status(400).json({ message: "Faltan datos en el body de la petición" });
             return;
@@ -117,8 +111,6 @@ export class DoctorController {
             let imageKey: string | null = null;
 
             if (req.file) {
-                console.log('📷 Archivo recibido:', req.file.originalname, req.file.size, 'bytes');
-
                 const uploadResult = await ImageService.uploadImage(req.file);
 
                 if (!uploadResult.success) {
@@ -131,9 +123,7 @@ export class DoctorController {
                 }
 
                 imageKey = uploadResult.imageKey || null;
-                console.log('✅ Imagen subida exitosamente con key:', imageKey);
             } else {
-                console.log('ℹ️ No se envió imagen, creando doctor sin imagen');
             }
 
             const result = await executeQuery(
@@ -161,9 +151,6 @@ export class DoctorController {
                 ...doctor,
                 imagen_doctor: ImageService.generateImageUrl(imageKey)
             };
-
-            console.log('URL de imagen generada:', responseDoctor.imagen_doctor);
-
             res.status(201).json({
                 success: true,
                 message: "Doctor creado exitosamente",
@@ -322,7 +309,6 @@ export class DoctorController {
             }
 
             if (citasCount > 0) {
-                console.log(`🗑️ Eliminando ${citasCount} citas asociadas al doctor ID: ${id}`);
                 await executeQuery('DELETE FROM citas WHERE doctor_id = ?', [id]);
             }
 

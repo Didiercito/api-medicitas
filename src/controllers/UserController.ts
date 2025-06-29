@@ -9,7 +9,7 @@ export class UserController {
             const users = await executeQuery('SELECT * FROM usuarios');
             const usersWithImages = (users as User[]).map(user => ({
                 ...user,
-                imageUrl: ImageService.generateImageUrl(user.imagen_usuario)
+                imagen_usuario: ImageService.generateImageUrl(user.imagen_usuario)
             }));
             res.status(200).json(usersWithImages);
         } catch (error) {
@@ -31,7 +31,7 @@ export class UserController {
             const user = result[0] as User;
             const userWithImage = {
                 ...user,
-                imageUrl: ImageService.generateImageUrl(user.imagen_usuario)
+                imagen_usuario: ImageService.generateImageUrl(user.imagen_usuario)
             };
             res.status(200).json(userWithImage);
         } catch (error) {
@@ -81,7 +81,7 @@ export class UserController {
                     await ImageService.deleteImage(existingUser.imagen_usuario);
                 }
 
-                imageKey = uploadResult.imageKey || null;
+                imageKey = uploadResult.imageKey;
             }
 
             const updatedData = {
@@ -123,7 +123,7 @@ export class UserController {
 
             const responseUser = {
                 ...updatedUser,
-                imageUrl: ImageService.generateImageUrl(updatedUser.imagen_usuario)
+                imagen_usuario: ImageService.generateImageUrl(updatedUser.imagen_usuario)
             };
 
             res.status(200).json({

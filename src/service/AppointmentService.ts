@@ -28,15 +28,10 @@ export class AppointmentService {
     }
 
     async create(data: CreateAppointmentData): Promise<any> {
-        console.log('🔍 Datos para crear cita:', data);
-
         const fechaCita = new Date(data.fecha_cita + 'T00:00:00');
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
 
-        console.log('🔍 Fecha de cita:', fechaCita);
-        console.log('🔍 Fecha de hoy:', hoy);
-        console.log('🔍 Es fecha pasada?:', fechaCita < hoy);
 
         if (fechaCita < hoy) {
             throw new Error('No se pueden agendar citas en fechas pasadas');
@@ -68,8 +63,6 @@ export class AppointmentService {
             ) VALUES (?, ?, ?, ?, 'programada', ?, ?, NOW(), NOW())`,
             [data.paciente_id, data.doctor_id, data.fecha_cita, data.hora_cita, data.motivo, data.notas]
         );
-
-        console.log('✅ Cita creada con ID:', result.insertId);
         return await this.getAppointmentWithDetails(result.insertId);
     }
 
@@ -154,10 +147,6 @@ export class AppointmentService {
             const fechaCita = new Date(fechaString + 'T00:00:00');
             const hoy = new Date();
             hoy.setHours(0, 0, 0, 0);
-
-            console.log('🔍 Fecha procesada:', fechaString);
-            console.log('🔍 Fecha objeto:', fechaCita);
-            console.log('🔍 Es válida:', !isNaN(fechaCita.getTime()));
 
             if (isNaN(fechaCita.getTime())) {
                 throw new Error('Fecha inválida');
@@ -269,21 +258,15 @@ export class AppointmentService {
     }
 
     async getAvailableSlots(doctorId: number, fecha: string): Promise<any> {
-        console.log('🔍 Obteniendo slots para doctor:', doctorId, 'fecha:', fecha);
 
         const fechaObj = new Date(fecha + 'T00:00:00');
         const diaSemana = fechaObj.getDay();
 
-        console.log('🔍 Día de la semana:', diaSemana);
-
         const horarios = await this.scheduleService.getByDoctor(doctorId);
-        console.log('🔍 Horarios del doctor:', horarios);
 
         const horarioDelDia = horarios.find(h => h.dia_semana === diaSemana && h.activo);
-        console.log('🔍 Horario del día encontrado:', horarioDelDia);
 
         if (!horarioDelDia) {
-            console.log('❌ No hay horarios para el día:', diaSemana);
             return {
                 slots: [],
                 resumen: {
@@ -299,9 +282,6 @@ export class AppointmentService {
             horarioDelDia.hora_fin,
             40 
         );
-
-        console.log('🔍 Slots generados:', allSlots);
-
         const citasExistentes = await executeQuery(
             `SELECT hora_cita, motivo, id 
          FROM citas 
@@ -309,8 +289,6 @@ export class AppointmentService {
          AND estado IN ('programada', 'confirmada')`,
             [doctorId, fecha]
         );
-
-        console.log('🔍 Citas existentes:', citasExistentes);
 
         const horasOcupadas = new Map();
         citasExistentes.forEach((cita: any) => {
@@ -338,8 +316,6 @@ export class AppointmentService {
         const disponibles = slotsConEstado.filter(slot => slot.disponible).length;
         const ocupados = slotsConEstado.filter(slot => !slot.disponible).length;
 
-        console.log('🔍 Slots con estado:', slotsConEstado);
-
         return {
             slots: slotsConEstado,
             resumen: {
@@ -355,13 +331,9 @@ export class AppointmentService {
         fecha: Date,
         hora: string
     ): Promise<boolean> {
-        console.log('🔍 Validando horario del doctor:', { doctorId, fecha, hora });
 
         const diaSemana = fecha.getDay();
         const horarios = await this.scheduleService.getByDoctor(doctorId);
-
-        console.log('🔍 Día de la semana:', diaSemana);
-        console.log('🔍 Horarios disponibles:', horarios);
 
         const horarioDelDia = horarios.find(h =>
             h.dia_semana === diaSemana &&
@@ -369,8 +341,6 @@ export class AppointmentService {
             hora >= h.hora_inicio &&
             hora <= h.hora_fin
         );
-
-        console.log('🔍 Horario válido encontrado:', !!horarioDelDia);
         return !!horarioDelDia;
     }
 
@@ -393,7 +363,6 @@ export class AppointmentService {
         }
 
         const conflicts = await executeQuery(query, params);
-        console.log('🔍 Conflictos encontrados:', conflicts.length);
         return conflicts.length > 0;
     }
 

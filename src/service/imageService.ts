@@ -61,7 +61,6 @@ export class ImageService {
     return `${IMAGES_FOLDER}${uniqueName}`;
   }
 
-  // Método para obtener la URL que AWS genera automáticamente
   static async getImageUrl(imageKey?: string | null): Promise<string | null> {
     if (!imageKey) return null;
     
@@ -71,10 +70,8 @@ export class ImageService {
         Key: imageKey
       });
 
-      // AWS generará automáticamente la URL
       const response = await s3Client.send(command);
       
-      // Construir la URL usando el formato estándar de AWS con región
       const region = process.env.AWS_REGION || 'us-east-1';
       return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${imageKey}`;
       
@@ -84,7 +81,6 @@ export class ImageService {
     }
   }
 
-  // Método síncrono para generar URL sin verificar existencia (más rápido)
   static generateImageUrl(imageKey?: string | null): string | null {
     if (!imageKey) return null;
     const region = process.env.AWS_REGION || 'us-east-1';
@@ -117,8 +113,6 @@ export class ImageService {
       await s3Client.send(uploadCommand);
 
       const imageUrl = this.generateImageUrl(imageKey);
-      
-      console.log(`✅ Imagen subida exitosamente: ${imageUrl}`);
 
       return {
         success: true,

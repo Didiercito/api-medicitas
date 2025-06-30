@@ -14,7 +14,7 @@ export class UserController {
             res.status(200).json({
                 success: true,
                 message: "Usuarios obtenidos correctamente",
-                data: usersWithImages
+                data: usersWithImages // Aquí sí mantén el array porque son múltiples usuarios
             });
         } catch (error) {
             console.error('Error al obtener usuarios:', error);
@@ -44,10 +44,11 @@ export class UserController {
                 imagen_usuario: ImageService.generateImageUrl(user.imagen_usuario)
             };
             
+            // ✅ CAMBIO: Devolver objeto directamente, no array
             res.status(200).json({
                 success: true,
                 message: "Usuario obtenido correctamente",
-                data: [userWithImage] 
+                data: userWithImage  // ← Objeto directo, no [userWithImage]
             });
         } catch (error) {
             console.error('Error al obtener usuario:', error);
@@ -167,10 +168,11 @@ export class UserController {
                 imagen_usuario: ImageService.generateImageUrl(updatedUser.imagen_usuario)
             };
 
+            // ✅ CAMBIO: Devolver objeto directamente, no array
             res.status(200).json({
                 success: true,
                 message: "Usuario actualizado correctamente",
-                data: responseUser
+                data: responseUser  // ← Objeto directo
             });
 
         } catch (error) {

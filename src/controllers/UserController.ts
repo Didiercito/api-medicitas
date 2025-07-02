@@ -14,7 +14,7 @@ export class UserController {
             res.status(200).json({
                 success: true,
                 message: "Usuarios obtenidos correctamente",
-                data: usersWithImages // Aquí sí mantén el array porque son múltiples usuarios
+                data: usersWithImages
             });
         } catch (error) {
             console.error('Error al obtener usuarios:', error);
@@ -44,11 +44,10 @@ export class UserController {
                 imagen_usuario: ImageService.generateImageUrl(user.imagen_usuario)
             };
             
-            // ✅ CAMBIO: Devolver objeto directamente, no array
             res.status(200).json({
                 success: true,
                 message: "Usuario obtenido correctamente",
-                data: userWithImage  // ← Objeto directo, no [userWithImage]
+                data: userWithImage
             });
         } catch (error) {
             console.error('Error al obtener usuario:', error);
@@ -64,11 +63,25 @@ export class UserController {
         
         const { 
             nombres, apellidos, correo, telefono, edad, genero, alergias, tipo_sangre,
-            imagen_base64  // ← NUEVO CAMPO PARA BASE64
-        } = req.body as Partial<User & { imagen_base64?: string }>;
+            profileImage  
+        } = req.body as Partial<User & { profileImage?: string }>;
 
-        // ✅ ACTUALIZAR VALIDACIÓN PARA INCLUIR BASE64
-        if ((!req.body || Object.keys(req.body).length === 0) && !req.file && !imagen_base64) {
+        console.log('🔍 DEBUG: Datos recibidos en updateUser:', {
+            id,
+            nombres,
+            apellidos,
+            correo,
+            telefono,
+            edad,
+            genero,
+            alergias,
+            tipo_sangre,
+            profileImage: profileImage ? 
+                (profileImage.startsWith('data:image') ? 'Base64 detectado' : 'URL/Key detectado') 
+                : 'No hay imagen'
+        });
+
+        if ((!req.body || Object.keys(req.body).length === 0) && !req.file) {
             res.status(400).json({ 
                 success: false,
                 message: "No se enviaron datos para actualizar." 
@@ -89,25 +102,77 @@ export class UserController {
             const existingUser = existingUserResult[0] as User;
             let imageKey = existingUser.imagen_usuario; 
 
-            if (imagen_base64) {
-                const uploadResult = await ImageService.uploadBase64Image(imagen_base64);
-                
-                if (!uploadResult.success) {
-                    res.status(400).json({
-                        success: false,
-                        message: "Error al subir la imagen desde base64",
-                        error: uploadResult.error
-                    });
-                    return;
-                }
+            console.log('🔍 Usuario existente encontrado:', {
+                id: existingUser.id,
+                nombres: existingUser.nombres,
+                imagen_actual: existingUser.imagen_usuario || 'Sin imagen'
+            });
 
-                if (existingUser.imagen_usuario) {
-                    await ImageService.deleteImage(existingUser.imagen_usuario);
+            if (profileImage !== undefined) {
+                if (profileImage === "" || profileImage === null) {
+                    console.log('🔍 Eliminando imagen existente...');
+                    if (existingUser.imagen_usuario) {
+                        const deleteResult = await ImageService.deleteImage(existingUser.imagen_usuario);
+                        if (deleteResult.success) {
+                            console.log('✅ Imagen anterior eliminada exitosamente');
+                        } else {
+                            console.log('⚠️ No se pudo eliminar imagen anterior:', deleteResult.error);
+                        }
+                    }
+                    imageKey = null;
                 }
+                else if (profileImage && profileImage.startsWith('data:image')) {
+                    console.log('🔍 Procesando imagen Base64...');
+                    console.log('🔍 Tamaño de cadena Base64:', profileImage.length);
+                    
+                    const uploadResult = await ImageService.uploadBase64Image(profileImage);
+                    
+                    if (!uploadResult.success) {
+                        console.error('❌ Error procesando Base64:', uploadResult.error);
+                        res.status(400).json({
+                            success: false,
+                            message: "Error al procesar la imagen",
+                            error: uploadResult.error
+                        });
+                        return;
+                    }
 
-                imageKey = uploadResult.imageKey;
+                    if (existingUser.imagen_usuario) {
+                        console.log('🔍 Eliminando imagen anterior...');
+                        const deleteResult = await ImageService.deleteImage(existingUser.imagen_usuario);
+                        if (deleteResult.success) {
+                            console.log('✅ Imagen anterior eliminada exitosamente');
+                        } else {
+                            console.log('⚠️ No se pudo eliminar imagen anterior:', deleteResult.error);
+                        }
+                    }
+
+                    imageKey = uploadResult.imageKey;
+                    console.log('✅ Imagen Base64 procesada exitosamente. Nuevo key:', imageKey);
+                }
+                else if (profileImage && profileImage.includes('amazonaws.com')) {
+                    console.log('🔍 Detectada URL de S3, extrayendo key...');
+                    const extractedKey = ImageService.extractKeyFromS3Url(profileImage);
+                    if (extractedKey) {
+                        imageKey = extractedKey;
+                        console.log('✅ Key extraído de URL:', imageKey);
+                    } else {
+                        console.log('⚠️ No se pudo extraer key de URL, manteniendo imagen existente');
+                        imageKey = existingUser.imagen_usuario;
+                    }
+                }
+                else if (profileImage && profileImage.includes('images/')) {
+                    console.log('🔍 Detectado key directo:', profileImage);
+                    imageKey = profileImage;
+                }
+                else if (profileImage) {
+                    console.log('🔍 Formato de imagen no reconocido, manteniendo imagen existente');
+                    console.log('🔍 Valor recibido:', profileImage.substring(0, 100) + '...');
+                    imageKey = existingUser.imagen_usuario;
+                }
             }
             else if (req.file) {
+                console.log('🔍 Procesando archivo subido...');
                 const uploadResult = await ImageService.uploadImage(req.file);
                 
                 if (!uploadResult.success) {
@@ -124,6 +189,7 @@ export class UserController {
                 }
 
                 imageKey = uploadResult.imageKey;
+                console.log('✅ Archivo subido exitosamente. Key:', imageKey);
             }
 
             const updatedData = {
@@ -135,8 +201,13 @@ export class UserController {
                 genero: genero || existingUser.genero,
                 alergias: alergias !== undefined ? alergias : existingUser.alergias,
                 tipo_sangre: tipo_sangre !== undefined ? tipo_sangre : existingUser.tipo_sangre,
-                imagen_usuario: imageKey  
+                imagen_usuario: imageKey 
             };
+
+            console.log('🔍 Datos a actualizar en BD:', {
+                ...updatedData,
+                imagen_usuario: updatedData.imagen_usuario ? 'Key presente: ' + updatedData.imagen_usuario : 'Sin imagen'
+            });
 
             const now = new Date();
             await executeQuery(
@@ -160,6 +231,8 @@ export class UserController {
                 ]
             );
 
+            console.log('✅ Usuario actualizado en BD exitosamente');
+
             const updatedUserResult = await executeQuery("SELECT * FROM usuarios WHERE id = ?", [id]);
             const updatedUser = updatedUserResult[0] as User;
 
@@ -168,18 +241,24 @@ export class UserController {
                 imagen_usuario: ImageService.generateImageUrl(updatedUser.imagen_usuario)
             };
 
-            // ✅ CAMBIO: Devolver objeto directamente, no array
+            console.log('✅ Respuesta final:', {
+                id: responseUser.id,
+                nombres: responseUser.nombres,
+                imagen_usuario: responseUser.imagen_usuario || 'Sin imagen'
+            });
+
             res.status(200).json({
                 success: true,
                 message: "Usuario actualizado correctamente",
-                data: responseUser  // ← Objeto directo
+                data: responseUser
             });
 
         } catch (error) {
-            console.error("Error al actualizar usuario:", error);
+            console.error("❌ Error al actualizar usuario:", error);
             res.status(500).json({ 
                 success: false,
-                message: "Error del servidor" 
+                message: "Error del servidor",
+                error: error instanceof Error ? error.message : 'Error desconocido'
             });
         }
     }
@@ -200,16 +279,25 @@ export class UserController {
             const user = userExists[0] as User;
 
             if (user.imagen_usuario) {
-                await ImageService.deleteImage(user.imagen_usuario);
+                console.log('🔍 Eliminando imagen del usuario antes de borrar:', user.imagen_usuario);
+                const deleteResult = await ImageService.deleteImage(user.imagen_usuario);
+                if (deleteResult.success) {
+                    console.log('✅ Imagen eliminada de S3 exitosamente');
+                } else {
+                    console.log('⚠️ No se pudo eliminar imagen de S3:', deleteResult.error);
+                }
             }
 
             await executeQuery("DELETE FROM usuarios WHERE id = ?", [id]);
+            
+            console.log('✅ Usuario eliminado exitosamente:', id);
+            
             res.status(200).json({ 
                 success: true,
                 message: "Usuario eliminado correctamente" 
             });
         } catch (error) {
-            console.error("Error al eliminar usuario:", error);
+            console.error("❌ Error al eliminar usuario:", error);
             res.status(500).json({ 
                 success: false,
                 message: "Error del servidor" 
